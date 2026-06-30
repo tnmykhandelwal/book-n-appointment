@@ -1,37 +1,23 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import PatientDashboard from './pages/PatientDashboard';
 import DoctorDashboard from './pages/DoctorDashboard';
 import Navbar from './components/Navbar';
-
-
-const ProtectedRoute = ({ children, allowedRole }) => {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user'));
-
-  if (!token || !user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (allowedRole && user.role !== allowedRole) {
-    return <Navigate to={user.role === 'doctor' ? '/doctor-dashboard' : '/patient-dashboard'} replace />;
-  }
-
-  return children;
-};
+import ProtectedRoute from './components/ProtectedRoute'; // <-- ADD THIS IMPORT LINE HERE
 
 function App() {
   return (
     <Router>
       <Navbar />
-      <div className="container">
+      <div>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           
-          {/* Protected Patient Routes */}
           <Route 
             path="/patient-dashboard" 
             element={
@@ -40,8 +26,6 @@ function App() {
               </ProtectedRoute>
             } 
           />
-
-          {/* Protected Doctor Routes */}
           <Route 
             path="/doctor-dashboard" 
             element={
@@ -50,9 +34,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
-
-          {/* Default Route redirection */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>

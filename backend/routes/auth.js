@@ -85,4 +85,26 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// @route   GET api/auth/doctors
+// @desc    Get a list of doctors filtered by specialization
+// @access  Private (Logged-in users)
+router.get('/doctors', async (req, res) => {
+  try {
+    const { specialization } = req.query;
+    
+    // Build a dynamic query object. If a specialization is passed, filter by it.
+    let query = { role: 'doctor' };
+    if (specialization) {
+      query.specialization = specialization;
+    }
+
+    // Find doctors and only return their name, email, and specialization (hide passwords)
+    const doctors = await User.find(query).select('name email specialization');
+    res.json(doctors);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send('Server Error while fetching doctors');
+  }
+});
+
 module.exports = router;

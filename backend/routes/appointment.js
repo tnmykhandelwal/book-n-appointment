@@ -133,7 +133,7 @@ router.get('/:id/receipt', authMiddleware, async (req, res) => {
 
     // Set the response headers so the browser triggers an automatic download
     const filename = `Receipt-${appointment._id}.pdf`;
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/pdf');
 
     // Pipe the PDF generation stream directly into the HTTP response object
@@ -142,20 +142,83 @@ router.get('/:id/receipt', authMiddleware, async (req, res) => {
     // Design the PDF Content Layout
     
     // --- HEADER SECTION ---
-    doc.fillColor('#1A365D') // Deep blue branding color
-       .fontSize(24)
-       .text("BOOK N' APPOINTMENT", { align: 'center', bolds: true });
-    
-    doc.fontSize(10)
-       .fillColor('#718096')
-       .text('Digital Medical Appointment Booking Slip', { align: 'center' });
-    
-    doc.moveDown(1.5);
-    
-    // Draw a divider line
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#E2E8F0').stroke();
-    doc.moveDown(1.5);
+    // ==========================================
+// 🌐 EXACT REACT LOGO IN PDFKIT
+// ==========================================
 
+const startX = 40;
+const startY = 40;
+
+// 1. Outer Tech Circles (with specific opacity and dashes)
+doc.save(); // Save state before changing opacities so text isn't affected later
+doc.circle(startX + 50, startY + 50, 42)
+   .lineWidth(4)
+   .strokeColor('#3b82f6')
+   .opacity(0.6)
+   .dash(6, { space: 6 })
+   .stroke();
+
+doc.circle(startX + 50, startY + 50, 35)
+   .lineWidth(2)
+   .strokeColor('#2563eb')
+   .opacity(0.4)
+   .undash() // clear the dash for the inner circle
+   .stroke();
+doc.restore(); // Restore canvas to full opacity 1.0
+
+// 2. Digital Nodes / Tech Pixels
+doc.circle(startX + 50, startY + 12, 3).fill('#60a5fa');
+doc.circle(startX + 50, startY + 88, 3).fill('#60a5fa');
+doc.circle(startX + 12, startY + 50, 3).fill('#60a5fa');
+doc.circle(startX + 88, startY + 50, 3).fill('#60a5fa');
+
+// 3. The Medical Cross with Linear Gradient
+// Create the exact gradient mapping from (20,20) to (80,80) just like your SVG <defs>
+const crossGradient = doc.linearGradient(startX + 20, startY + 20, startX + 80, startY + 80);
+crossGradient.stop(0, '#3b82f6'); // Vibrant Blue
+crossGradient.stop(1, '#10b981'); // Emerald Green
+
+doc.save()
+   .translate(startX, startY)
+   .path("M40 25C40 22.2386 42.2386 20 45 20H55C57.7614 20 60 22.2386 60 25V40H75C77.7614 40 80 42.2386 80 45V55C80 57.7614 77.7614 60 75 60H60V75C60 57.7614 57.7614 80 55 80H45C42.2386 80 40 77.7614 40 75V60H25C22.2386 60 20 57.7614 20 55V45C20 42.2386 22.2386 40 25 40H40V25Z")
+   .fill(crossGradient)
+   .restore();
+
+// 4. Digital Heartbeat / Pulsing EKG Line
+doc.save()
+   .translate(startX, startY)
+   .path("M25 50H38L43 35L49 65L55 45L59 53L63 50H75")
+   .lineWidth(3.5)
+   .lineCap('round')
+   .lineJoin('round')
+   .stroke('#ffffff')
+   .restore();
+
+// ==========================================
+// ✍️ TYPOGRAPHY ALIGNED TO LOGO GEOMETRY
+// ==========================================
+doc.fillColor('#0f172a')
+   .font('Helvetica-Bold')
+   .fontSize(24)
+   .text("Book N'", 160, 75, { continued: true })
+   .fillColor('#10b981')
+   .text(" Appointment");
+
+doc.fillColor('#64748b')
+   .font('Helvetica-Bold')
+   .fontSize(8)
+   .text('CONNECTED CLINICAL ECOSYSTEM', 162, 108, { characterSpacing: 1.5 });
+
+// Structural separator bar beneath the branded header area
+doc.moveTo(20, 160)
+   .lineTo(590, 160)
+   .lineWidth(1)
+   .stroke('#e2e8f0');
+
+// Reset cursor for the rest of the document
+doc.x = 40;
+doc.y = 190;
+doc.fillColor('#334155').font('Helvetica').fontSize(11);
     // --- APPOINTMENT SUMMARY CARDS ---
     doc.fillColor('#2D3748').fontSize(14).text('Appointment Status: Confirmed', { bolds: true });
     doc.fontSize(10).fillColor('#718096').text(`Slip ID: ${appointment._id}`);
@@ -177,6 +240,12 @@ router.get('/:id/receipt', authMiddleware, async (req, res) => {
     doc.text(`Scheduled Date:  ${appointment.date}`);
     doc.text(`Assigned Slot:   ${appointment.timeSlot}`);
     doc.text(`Purpose:         ${appointment.purposeOfVisit}`);
+    // Inside your doc layout generation block in GET /:id/receipt:
+    if (appointment.status === 'completed') {
+      doc.moveDown();
+      doc.fillColor('#2F855A').fontSize(12).text('DOCTOR CLOSING REMARKS & PRESCRIPTION', { underline: true });
+      doc.fillColor('#2D3748').fontSize(11).text(`Notes: ${appointment.comments}`);
+}
     
     doc.moveDown(2);
 
@@ -202,6 +271,33 @@ router.get('/:id/receipt', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('PDF Generation Error:', error.message);
     res.status(500).send('Server Error while generating PDF receipt');
+  }
+});
+// @route   GET api/appointments/patient/history
+// @desc    Get all past completed appointments for the logged-in patient
+// @access  Private (Patient only)
+router.get('/patient/history', authMiddleware, async (req, res) => {
+  try {
+    const history = await Appointment.find({ patientId: req.user.id, status: 'completed' })
+      .populate('doctorId', 'name specialization')
+      .sort({ date: -1 }); // Newest first
+    res.json(history);
+  } catch (error) {
+    res.status(500).send('Server Error fetching patient history');
+  }
+});
+
+// @route   GET api/appointments/doctor/history
+// @desc    Get all past completed appointments for the logged-in doctor
+// @access  Private (Doctor only)
+router.get('/doctor/history', authMiddleware, async (req, res) => {
+  try {
+    const history = await Appointment.find({ doctorId: req.user.id, status: 'completed' })
+      .populate('patientId', 'name email')
+      .sort({ date: -1 });
+    res.json(history);
+  } catch (error) {
+    res.status(500).send('Server Error fetching doctor history');
   }
 });
 
